@@ -1,0 +1,1 @@
+"""Custom TORCS racing reward: speed, track position, angle, damage, off-track penalties"""

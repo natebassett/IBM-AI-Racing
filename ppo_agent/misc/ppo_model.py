@@ -1,4 +1,4 @@
-"""PPO actor-critic network."""
+"""Neural network: actor + critic"""
 
 import torch
 import torch.nn as nn
@@ -17,7 +17,7 @@ class ActorCritic(nn.Module):
             nn.Linear(128, 128),
             nn.Tanh(),
             nn.Linear(128, config.ACTION_DIM),
-            nn.Tanh(),
+            nn.Tanh()
         )
 
         self.critic = nn.Sequential(
@@ -25,24 +25,23 @@ class ActorCritic(nn.Module):
             nn.Tanh(),
             nn.Linear(128, 128),
             nn.Tanh(),
-            nn.Linear(128, 1),
+            nn.Linear(128, 1)
         )
 
         self.action_var = torch.full(
             (config.ACTION_DIM,),
-            config.ACTION_STD_INIT ** 2,
-            dtype=torch.float32,
+            config.ACTION_STD_INIT ** 2
         )
 
     def set_action_std(self, new_std):
         self.action_var = torch.full(
             (config.ACTION_DIM,),
-            new_std ** 2,
-            dtype=torch.float32,
+            new_std ** 2
         )
 
     def act(self, state):
         action_mean = self.actor(state)
+
         cov_matrix = torch.diag(self.action_var).to(state.device)
         dist = MultivariateNormal(action_mean, cov_matrix)
 
@@ -62,6 +61,6 @@ class ActorCritic(nn.Module):
 
         log_probs = dist.log_prob(actions)
         entropy = dist.entropy()
-        values = self.critic(states).squeeze(-1)
+        values = self.critic(states).squeeze()
 
         return log_probs, values, entropy

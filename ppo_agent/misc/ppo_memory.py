@@ -1,5 +1,4 @@
-"""Stores states, actions, rewards, log probabilities and values during PPO training."""
-
+"""Stores states, actions, rewards, log probabilities during training"""
 
 class PPOMemory:
     def __init__(self):
@@ -14,9 +13,9 @@ class PPOMemory:
         self.states.append(state)
         self.actions.append(action)
         self.log_probs.append(log_prob)
-        self.rewards.append(float(reward))
+        self.rewards.append(reward)
         self.values.append(value)
-        self.dones.append(bool(done))
+        self.dones.append(done)
 
     def clear(self):
         self.states.clear()

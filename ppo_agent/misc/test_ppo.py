@@ -1,8 +1,8 @@
-"""Loads a saved PPO model and runs it in TORCS."""
+"""Loads a saved PPO model and runs it in TORCS"""
 
 import os
-
 import torch
+import numpy as np
 
 import config
 from ppo_model import ActorCritic
@@ -23,7 +23,7 @@ def test(model_name):
 
     state, raw_obs = env.reset(relaunch=True)
 
-    total_reward = 0.0
+    total_reward = 0
 
     for step in range(config.MAX_STEPS):
         state_tensor = torch.tensor(state, dtype=torch.float32).to(device)
@@ -32,10 +32,10 @@ def test(model_name):
             action = policy.actor(state_tensor)
 
         state, reward, done, info, raw_obs = env.step(action.cpu().numpy())
+
         total_reward += reward
 
         if done:
-            print(f"Test ended: {info.get('failure_reason', 'torcs_done')}")
             break
 
     print(f"Test finished | Reward: {total_reward:.2f} | Steps: {step + 1}")
@@ -44,4 +44,4 @@ def test(model_name):
 
 
 if __name__ == "__main__":
-    test("ppo_torcs_episode_500.pth")
+    test("ppo_torcs_episode_300.pth")

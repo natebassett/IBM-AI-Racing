@@ -1,16 +1,15 @@
-"""Main PPO training script."""
+"""Main training script"""
 
-import csv
 import os
-
-import numpy as np
+import csv
 import torch
+import numpy as np
 import torch.nn as nn
 import torch.optim as optim
 
 import config
-from ppo_memory import PPOMemory
 from ppo_model import ActorCritic
+from ppo_memory import PPOMemory
 from torcs_env_wrapper import TorcsEnvWrapper
 
 
@@ -18,24 +17,24 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def compute_returns_and_advantages(memory):
-    returns = []
-    discounted_reward = 0.0
+    rewards = []
+    discounted_reward = 0
 
     for reward, done in zip(reversed(memory.rewards), reversed(memory.dones)):
         if done:
-            discounted_reward = 0.0
+            discounted_reward = 0
         discounted_reward = reward + config.GAMMA * discounted_reward
-        returns.insert(0, discounted_reward)
+        rewards.insert(0, discounted_reward)
 
-    returns = torch.tensor(returns, dtype=torch.float32).to(device)
-    values = torch.cat(memory.values).squeeze(-1).to(device)
+    rewards = torch.tensor(rewards, dtype=torch.float32).to(device)
+    values = torch.cat(memory.values).squeeze().to(device)
 
-    advantages = returns - values.detach()
+    advantages = rewards - values.detach()
 
     if len(advantages) > 1:
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
-    return returns, advantages
+    return rewards, advantages
 
 
 def update_policy(policy, old_policy, optimizer, memory):
@@ -54,7 +53,7 @@ def update_policy(policy, old_policy, optimizer, memory):
         surrogate_2 = torch.clamp(
             ratios,
             1 - config.CLIP_EPSILON,
-            1 + config.CLIP_EPSILON,
+            1 + config.CLIP_EPSILON
         ) * advantages
 
         actor_loss = -torch.min(surrogate_1, surrogate_2).mean()
@@ -65,22 +64,21 @@ def update_policy(policy, old_policy, optimizer, memory):
 
         optimizer.zero_grad()
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(policy.parameters(), 0.5)
         optimizer.step()
 
     old_policy.load_state_dict(policy.state_dict())
 
 
-def save_log(log_file, episode, reward, steps, reason):
+def save_log(log_file, episode, reward, steps):
     file_exists = os.path.exists(log_file)
 
     with open(log_file, "a", newline="") as file:
         writer = csv.writer(file)
 
         if not file_exists:
-            writer.writerow(["episode", "reward", "steps", "end_reason"])
+            writer.writerow(["episode", "reward", "steps"])
 
-        writer.writerow([episode, reward, steps, reason])
+        writer.writerow([episode, reward, steps])
 
 
 def train():
@@ -101,11 +99,11 @@ def train():
     log_file = os.path.join(config.LOG_PATH, "ppo_training_log.csv")
 
     for episode in range(1, config.MAX_EPISODES + 1):
-        relaunch = episode % config.RELAUNCH_FREQUENCY == 0
-        state, raw_obs = env.reset(relaunch=relaunch)
+        relaunch = False
 
-        episode_reward = 0.0
-        end_reason = "max_steps"
+        state, raw_obs = env.reset(relaunch=False)
+
+        episode_reward = 0
 
         for step in range(config.MAX_STEPS):
             state_tensor = torch.tensor(state, dtype=torch.float32).to(device)
@@ -120,41 +118,34 @@ def train():
                 log_prob.cpu(),
                 reward,
                 value.cpu(),
-                done,
+                done
             )
 
             state = next_state
             episode_reward += reward
             timestep += 1
 
-            if timestep % config.UPDATE_TIMESTEPS == 0 and len(memory.states) > 0:
+            if timestep % config.UPDATE_TIMESTEPS == 0:
                 update_policy(policy, old_policy, optimizer, memory)
                 memory.clear()
 
             if done:
-                end_reason = info.get("failure_reason", "torcs_done")
-                print(f"Episode ended: {end_reason}")
+                if "failure_reason" in info:
+                    print(f"Episode ended: {info['failure_reason']}")
                 break
 
-        save_log(log_file, episode, episode_reward, step + 1, end_reason)
+        save_log(log_file, episode, episode_reward, step + 1)
 
-        print(
-            f"Episode {episode} | Reward: {episode_reward:.2f} | "
-            f"Steps: {step + 1} | End: {end_reason}"
-        )
+        print(f"Episode {episode} | Reward: {episode_reward:.2f} | Steps: {step + 1}")
 
         if episode % config.SAVE_INTERVAL == 0:
             model_path = os.path.join(
                 config.MODEL_SAVE_PATH,
-                f"ppo_torcs_episode_{episode}.pth",
+                f"ppo_torcs_episode_{episode}.pth"
             )
 
             torch.save(policy.state_dict(), model_path)
             print(f"Saved model: {model_path}")
-
-    if len(memory.states) > 0:
-        update_policy(policy, old_policy, optimizer, memory)
-        memory.clear()
 
     env.close()
 
